@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Loan Tracker</title>
+<style>
+/* ===== Global Styles ===== */
+body { font-family: 'Poppins', sans-serif; margin:0; background: linear-gradient(135deg,#4f46e5,#9333ea); color:#111; }
+.container { padding:1.5rem; max-width:800px; margin:auto; }
+.card { background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); border-radius:1.25rem; padding:1.5rem; box-shadow:0 6px 20px rgba(0,0,0,0.15); margin-bottom:1.5rem; }
+h2,h3{ margin:0 0 0.5rem 0; }
+.progress-bar{ background:#e5e7eb; border-radius:8px; height:12px; width:100%; overflow:hidden; }
+.progress-fill{ background: linear-gradient(90deg,#22c55e,#3b82f6); height:100%; width:0%; transition:width 0.8s ease; }
+.pay-btn{ display:block; text-align:center; background: linear-gradient(90deg,#6366f1,#9333ea); color:#fff; padding:0.9rem; margin-top:1rem; border-radius:0.9rem; font-weight:bold; text-decoration:none; transition: transform 0.2s; }
+.pay-btn:hover{ transform:scale(1.05); }
+.tab-bar{ position:fixed; bottom:0; left:0; right:0; background:rgba(255,255,255,0.9); backdrop-filter: blur(8px); border-top:1px solid #ddd; display:flex; justify-content:space-around; padding:0.8rem 0; }
+.tab-bar button{ background:none; border:none; font-size:1rem; color:#555; transition:color 0.3s; }
+.tab-bar button.active{ color:#4f46e5; font-weight:bold; }
+.hidden{ display:none; }
+/* AI Chatbot */
+#chatbox{ max-height:200px; overflow-y:auto; padding:0.5rem; background:#f3f4f6; border-radius:0.8rem; margin-top:1rem; }
+.chat-msg{ margin:0.3rem 0; }
+.user{ color:#9333ea; font-weight:bold; }
+.bot{ color:#047857; font-weight:bold; }
+/* Confetti Canvas */
+#confetti-canvas{ position:fixed; top:0; left:0; pointer-events:none; z-index:9999; }
+/* Badge Display */
+#badge-container{ display:flex; justify-content:start; flex-wrap:wrap; gap:10px; margin-top:1rem; }
+.badge{ width:60px; height:60px; border-radius:50%; display:flex; justify-content:center; align-items:center; background: #f3f4f6; color:#333; font-weight:bold; box-shadow:0 3px 8px rgba(0,0,0,0.2); transition: transform 0.3s; }
+.badge.unlocked{ background:linear-gradient(90deg,#22c55e,#3b82f6); color:#fff; transform:scale(1.2); }
+</style>
+</head>
+<body>
+
+<!-- Confetti Canvas -->
+<canvas id="confetti-canvas"></canvas>
+
+<!-- Home Page -->
+<div id="home" class="container">
+  <div class="card">
+    <h2>📱 Smartphone Loan</h2>
+    <p>Model: BG6M</p>
+    <div style="display:flex; justify-content:space-between; margin-top:1rem;">
+      <div><p>Paid</p><p id="paidDays">44 Days</p></div>
+      <div><p>Left to pay</p><p id="remainingDays">138 Days</p></div>
+    </div>
+    <div class="progress-bar mt-3"><div class="progress-fill" id="progress"></div></div>
+    <p id="progressText">44 days paid of 182 total</p>
+    <p id="congratsMsg" class="text-green-600"></p>
+    <a href="#" onclick="showPage('payments')" class="pay-btn">💳 Pay</a>
+  </div>
+
+  <div class="card">
+    <h3>🤖 AI Loan Assistant</h3>
+    <div id="chatbox"></div>
+    <input type="text" id="userInput" placeholder="Ask me anything..." style="width:100%; padding:0.6rem; margin-top:0.5rem; border-radius:0.6rem; border:1px solid #ddd;">
+    <button onclick="askAI()" class="pay-btn">Ask AI</button>
+  </div>
+</div>
+
+<!-- Payments Page -->
+<div id="payments" class="container hidden">
+  <h2>💳 Payments</h2>
+  <div class="card">
+    <h3>Pay with Airtel Money</h3>
+    <form id="paymentForm">
+      <label>Enter Amount (UGX):</label><br>
+      <input type="number" id="amount" value="2272" required style="width:100%; padding:0.5rem;"><br><br>
+      <label>Your Airtel Number:</label><br>
+      <input type="tel" id="phone" placeholder="07XXXXXXXX" required style="width:100%; padding:0.5rem;"><br><br>
+      <button type="submit" class="pay-btn">Pay Now</button>
+    </form>
+    <p id="paymentStatus"></p>
+  </div>
+</div>
+
+<!-- Profile Page -->
+<div id="profile" class="container hidden">
+  <h2>👤 Profile</h2>
+  <div class="card">
+    <p><strong>Name:</strong> John Doe</p>
+    <p><strong>Phone:</strong> +2567XXXXXXX</p>
+    <p><strong>Status:</strong> Active</p>
+    <h3>🏅 Badges</h3>
+    <div id="badge-container">
+      <div class="badge" data-percent="25">25%</div>
+      <div class="badge" data-percent="50">50%</div>
+      <div class="badge" data-percent="75">75%</div>
+      <div class="badge" data-percent="100">100%</div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<div class="tab-bar">
+  <button id="tab-home" onclick="showPage('home')">🏠 Home</button>
+  <button id="tab-payments" onclick="showPage('payments')">💳 Payments</button>
+  <button id="tab-profile" onclick="showPage('profile')">👤 Profile</button>
+</div>
+
+<script>
+// Progress & Badges
+let paidDays = 44;
+const totalDays = 182;
+const dailyRate = 2272;
+const milestones = [25,50,75,100];
+let unlockedMilestones = [];
+
+function updateProgress(){
+  const percent = Math.floor((paidDays/totalDays)*100);
+  document.getElementById("paidDays").innerText = paidDays+" Days";
+  document.getElementById("remainingDays").innerText = (totalDays-paidDays)+" Days";
+  document.getElementById("progressText").innerText = `${paidDays} days paid of ${totalDays} total`;
+  document.getElementById("progress").style.width = percent+"%";
+
+  // Unlock badges
+  milestones.forEach(m=>{
+    if(percent>=m && !unlockedMilestones.includes(m)){
+      unlockedMilestones.push(m);
+      document.querySelector(`.badge[data-percent="${m}"]`).classList.add("unlocked");
+      startConfetti();
+      setTimeout(stopConfetti,3000);
+      if(m===100) document.getElementById("congratsMsg").innerText="🎉 Congratulations! Fully paid!";
+    }
+  });
+}
+
+// Navigation
+function showPage(pageId){
+  document.querySelectorAll(".container").forEach(d=>d.classList.add("hidden"));
+  document.getElementById(pageId).classList.remove("hidden");
+  document.querySelectorAll(".tab-bar button").forEach(btn=>btn.classList.remove("active"));
+  document.getElementById("tab-"+pageId).classList.add("active");
+}
+showPage("home");
+
+// Payments
+document.getElementById("paymentForm").addEventListener("submit",function(e){
+  e.preventDefault();
+  const amount=parseInt(document.getElementById("amount").value);
+  document.getElementById("paymentStatus").innerText="Processing payment...";
+  setTimeout(()=>{
+    const daysBought = Math.floor(amount/dailyRate);
+    paidDays += daysBought;
+    if(paidDays>totalDays) paidDays=totalDays;
+    updateProgress();
+    document.getElementById("paymentStatus").innerText=`✅ Payment successful! You added ${daysBought} day(s).`;
+  },1500);
+});
+
+// AI Chatbot
+function askAI(){
+  const input=document.getElementById("userInput").value;
+  if(!input) return;
+  const chatbox=document.getElementById("chatbox");
+  chatbox.innerHTML+=`<div class="chat-msg user">You: ${input}</div>`;
+  let response="I’m still learning. Can you rephrase?";
+  if(input.includes("pay")){
+    const amount=input.match(/\d+/);
+    if(amount){
+      const days=Math.floor(amount[0]/dailyRate);
+      response=`If you pay ${amount[0]} UGX, that covers ${days} day(s).`;
+    }
+  } else if(input.includes("left")){ response=`You have ${totalDays-paidDays} days left.`; }
+  else if(input.includes("finish")){ response=`At your current pace, finish in ${totalDays-paidDays} days.`; }
+  setTimeout(()=>{ chatbox.innerHTML+=`<div class="chat-msg bot">AI: ${response}</div>`; chatbox.scrollTop=chatbox.scrollHeight; },600);
+  document.getElementById("userInput").value="";
+}
+
+// Confetti
+const confettiCanvas=document.getElementById("confetti-canvas");
+const ctx=confettiCanvas.getContext("2d");
+confettiCanvas.width=window.innerWidth;
+confettiCanvas.height=window.innerHeight;
+let confettiParticles=[],confettiActive=false;
+function startConfetti(){
+  confettiActive=true;
+  confettiParticles=Array.from({length:150}).map(()=>({
+    x:Math.random()*confettiCanvas.width,
+    y:Math.random()*confettiCanvas.height-200,
+    r:Math.random()*6+4,
+    d:Math.random()*150,
+    color:`hsl(${Math.random()*360},100%,50%)`,
+    tilt:Math.random()*10-10
+  }));
+  requestAnimationFrame(drawConfetti);
+}
+function stopConfetti(){ confettiActive=false; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+function drawConfetti(){
+  ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+  if(confettiActive){
+    confettiParticles.forEach(p=>{
+      ctx.beginPath(); ctx.fillStyle=p.color; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      p.y += Math.cos(p.d)+1+p.r/2; p.x += Math.sin(p.d);
+      if(p.y>confettiCanvas.height){ p.x=Math.random()*confettiCanvas.width; p.y=-10; }
+    });
+    requestAnimationFrame(drawConfetti);
+  }
+}
+window.addEventListener('resize',()=>{ confettiCanvas.width=window.innerWidth; confettiCanvas.height=window.innerHeight; });
+
+// Initialize
+updateProgress();
+</script>
+
+</body>
+</html>
